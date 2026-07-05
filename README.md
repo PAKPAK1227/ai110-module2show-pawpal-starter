@@ -65,19 +65,36 @@ Sorted 6 pending task(s) by priority. Scheduled 5 using 80 of 90 min; skipped 1 
 
 ## 🧪 Testing PawPal+
 
+Run the full suite from the project root:
+
 ```bash
-# Run the full test suite:
-pytest
-
-# Run with coverage:
-pytest --cov
+python -m pytest
 ```
 
-Sample test output:
+**What the tests cover** (`tests/test_pawpal.py`, 13 tests):
+
+- **Task & pet basics** — marking a task complete flips its status; adding a task grows the pet's task list.
+- **Sorting** — `sort_by_time()` returns tasks in chronological `HH:MM` order and pushes unscheduled tasks last.
+- **Filtering** — `filter_tasks()` narrows by pet name and by completion status.
+- **Recurrence** — completing a daily task queues a copy due the next day; a weekly task advances one week; a one-off task does not regenerate.
+- **Conflict detection** — `detect_conflicts()` flags two tasks sharing a time slot and stays silent when times differ.
+- **Priority planning & edge cases** — `build_plan()` skips tasks that exceed the time budget, and an owner with no tasks produces an empty, non-crashing plan.
+
+Successful run:
 
 ```
-# Paste your pytest output here
+============================= test session starts ==============================
+platform darwin -- Python 3.13.7, pytest-9.1.0, pluggy-1.6.0
+collected 13 items
+
+tests/test_pawpal.py .............                                       [100%]
+
+============================== 13 passed in 0.05s ==============================
 ```
+
+**Confidence Level: ★★★★☆ (4/5)**
+
+The core scheduling behaviors — sorting, filtering, recurrence, conflict detection, and budget-aware planning — are all covered by passing tests, including key edge cases. I held back the fifth star because conflict detection only checks exact time matches (not overlapping durations), and the recurring/conflict features aren't yet exercised end-to-end through the Streamlit UI.
 
 ## 📐 Smarter Scheduling
 
