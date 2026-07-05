@@ -33,8 +33,9 @@ Relationships: an Owner has many Pets, each Pet has many Tasks, and the Schedule
 
 **a. Constraints and priorities**
 
-- What constraints does your scheduler consider (for example: time, priority, preferences)?
-- How did you decide which constraints mattered most?
+The scheduler considers three constraints: the owner's available minutes (a time budget), each task's priority, and each task's set time (used for the agenda and conflict checks). Preferences are stored on the `Owner` but not yet used by the planner.
+
+Priority mattered most. A busy owner's real question is "if I can't do everything, what must get done?" — so `build_plan` schedules high priority first, breaking ties by shortest duration to fit more in.
 
 **b. Tradeoffs**
 
@@ -48,13 +49,18 @@ This is a reasonable tradeoff for this scenario because exact-time matching is O
 
 **a. How you used AI**
 
-- How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
-- What kinds of prompts or questions were most helpful?
+I used AI across every phase: brainstorming the UML classes, generating skeleton stubs, writing the scheduling algorithms, drafting tests, and wiring the Streamlit UI. Small, concrete prompts worked best — e.g. "sort Task objects by an HH:MM string using a lambda key" or "give a lightweight conflict-detection strategy that warns instead of crashing." Asking it to review a file for missing relationships also caught a real bug (a `task_id` with no matching `id` field).
 
 **b. Judgment and verification**
 
-- Describe one moment where you did not accept an AI suggestion as-is.
-- How did you evaluate or verify what the AI suggested?
+I didn't accept the AI's terser `detect_conflicts` (a one-line `defaultdict` + comprehension) because it packed grouping, filtering, and string-building into one expression that was hard to scan; I kept my readable two-phase version instead. I verified every change by running `python main.py` and `python -m pytest`, and used Streamlit's `AppTest` to exercise the UI headlessly.
+
+**c. AI strategy**
+
+- **Most effective features:** agent/multi-file editing for the recurrence change (it touched `Task` and `Scheduler` together), inline chat on a single method for refactors, and attaching a file so it could review the UML/skeleton for gaps.
+- **A suggestion I modified:** I kept the `Scheduler` as a class rather than collapsing it into a loose function, and dropped the separate `DailyPlan` class in favor of a simple dict — trimming complexity the AI would otherwise have carried along.
+- **Separate chat sessions per phase** kept each context focused: testing prompts didn't muddy implementation context, so suggestions stayed on-task instead of drifting.
+- **Lead architect takeaway:** AI is fast at options and boilerplate, but the decisions — keep it four classes, warn instead of crash, exact-time conflicts for now — were mine. I treated its output as a draft to verify, not an answer to trust.
 
 ---
 
@@ -62,13 +68,11 @@ This is a reasonable tradeoff for this scenario because exact-time matching is O
 
 **a. What you tested**
 
-- What behaviors did you test?
-- Why were these tests important?
+The 13 tests cover the behaviors an owner relies on: marking tasks complete, adding tasks, sorting by time (including unscheduled-last), filtering by pet and status, daily and weekly recurrence, non-recurring tasks not regenerating, conflict detection (flagged and clear cases), budget-based skipping, and an empty plan. These matter because they're exactly the behaviors most likely to break during a refactor.
 
 **b. Confidence**
 
-- How confident are you that your scheduler works correctly?
-- What edge cases would you test next if you had more time?
+Confident — 4/5. The core logic is well covered, including edge cases. The gaps: the Streamlit UI has no automated tests in the suite (I verified it manually with `AppTest`), and conflict detection only checks exact times. Next I'd test overlapping-duration conflicts, midnight/late-day edge times, and editing a whole recurring series.
 
 ---
 
@@ -76,12 +80,12 @@ This is a reasonable tradeoff for this scenario because exact-time matching is O
 
 **a. What went well**
 
-- What part of this project are you most satisfied with?
+The clean split between the logic layer (`pawpal_system.py`) and the UI (`app.py`). The `Scheduler` methods are small and independently testable, which made adding sorting, filtering, recurrence, and conflicts low-risk.
 
 **b. What you would improve**
 
-- If you had another iteration, what would you improve or redesign?
+I'd make `build_plan` respect each task's set time instead of auto-sequencing from 08:00, so the agenda and the auto-fit plan agree. I'd also upgrade conflict detection to be duration-aware.
 
 **c. Key takeaway**
 
-- What is one important thing you learned about designing systems or working with AI on this project?
+Being the lead architect matters more than the code the AI writes. Small, verifiable increments and clear design calls kept the system coherent — the AI accelerated the work, but I owned the direction.

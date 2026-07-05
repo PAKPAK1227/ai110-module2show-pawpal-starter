@@ -22,6 +22,17 @@ Your final app should:
 - Display the plan clearly (and ideally explain the reasoning)
 - Include tests for the most important scheduling behaviors
 
+## ✨ Features
+
+PawPal+ pairs a plain-Python logic layer (`pawpal_system.py`) with a Streamlit UI (`app.py`):
+
+- **Owner / pet / task modeling** — an `Owner` manages multiple `Pet`s, each owning its own `Task`s (description, time, duration, priority, frequency, completion).
+- **Priority-first auto-planning** — `Scheduler.build_plan()` greedily fits tasks into the owner's available minutes, highest priority first, and reports what it scheduled, what it skipped, and why.
+- **Sort by time** — `Scheduler.sort_by_time()` orders tasks chronologically by their `HH:MM` time (unscheduled tasks last).
+- **Filtering** — `Scheduler.filter_tasks()` narrows tasks by pet name and/or completion status.
+- **Daily & weekly recurrence** — completing a recurring task auto-creates its next occurrence with the correct next due date (`Task.next_occurrence()` + `Scheduler.mark_task_complete()`).
+- **Conflict warnings** — `Scheduler.detect_conflicts()` flags tasks booked at the same time and returns friendly warnings instead of crashing.
+
 ## Getting started
 
 ### Setup
@@ -108,12 +119,71 @@ The core scheduling behaviors — sorting, filtering, recurrence, conflict detec
 
 ## 📸 Demo Walkthrough
 
-Describe your app in numbered steps so a reader can follow along without watching a video:
+Launch the Streamlit app with:
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+```bash
+streamlit run app.py
+```
+
+### Main UI features and actions
+
+- **Owner panel** — set the owner's name and how many minutes of care time are available today.
+- **Add a pet** — enter a name, species, and breed to register a pet.
+- **Add a task** — pick a pet, then set the task's description, time, duration, priority, and frequency (daily / weekly / once).
+- **Task list** — filter tasks by pet or hide completed ones, and tick a checkbox to mark a task done.
+- **Today's Schedule** — see conflict warnings, a time-sorted agenda, and an on-demand auto-fit plan.
+
+### Example workflow
+
+1. Set the owner name to **Sam** and available time to **120 minutes**.
+2. **Add a pet:** "Biscuit" (dog, Golden Retriever).
+3. **Add a task:** "Morning walk" at 08:00, 30 min, high priority, daily.
+4. **Add another task:** "Feeding" at 08:00, 10 min, high priority, daily.
+5. Scroll to **Today's Schedule** — a ⚠️ conflict warning appears because both tasks are booked at 08:00.
+6. Change one task's time, then click **Auto-fit plan for my available time** to see the priority-ordered plan.
+7. Tick **Morning walk** complete — because it's daily, tomorrow's copy is queued automatically (a "🔁 re-added" message confirms it).
+
+### Key Scheduler behaviors shown
+
+- **Sorting** — the agenda lists tasks in chronological order via `Scheduler.sort_by_time()`.
+- **Filtering** — the "Show pet" / "Hide completed" controls use `Scheduler.filter_tasks()`.
+- **Conflict warnings** — same-time tasks trigger `st.warning` banners from `Scheduler.detect_conflicts()`.
+- **Recurrence** — completing a daily/weekly task regenerates it via `Scheduler.mark_task_complete()`.
+- **Priority planning** — the auto-fit plan comes from `Scheduler.build_plan()`.
+
+### Sample CLI output (`python main.py`)
+
+```
+===========================================
+Today's Schedule for Sam  (budget: 120 min)
+===========================================
+  08:00-08:05  Feeding           5 min  [high  ] Whiskers
+  08:05-08:15  Feeding          10 min  [high  ] Biscuit
+  08:15-08:45  Morning walk     30 min  [high  ] Biscuit
+  08:45-08:55  Litter box       10 min  [medium] Whiskers
+  08:55-09:35  Grooming         40 min  [medium] Biscuit
+  09:35-10:00  Enrichment play  25 min  [low   ] Biscuit
+
+Total care time: 120 min
+Sorted 6 pending task(s) by priority. Scheduled 6 using 120 of 120 min; skipped 0 that did not fit.
+
+Agenda sorted by time
+---------------------
+  07:30  Feeding
+  07:30  Feeding
+  08:00  Morning walk
+  12:00  Grooming
+  17:00  Enrichment play
+  18:00  Litter box
+
+Conflict check
+--------------
+  ⚠️  Conflict at 07:30: Feeding (Biscuit), Feeding (Whiskers)
+
+Recurring tasks
+---------------
+  Before: Biscuit has 4 tasks; completing weekly 'Grooming'
+  After:  Biscuit has 5 tasks; next 'Grooming' due 2026-07-12
+```
 
 **Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->

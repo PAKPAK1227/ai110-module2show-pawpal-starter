@@ -1,6 +1,8 @@
+from datetime import time as clock
+
 import streamlit as st
 
-# Step 1: bring the logic-layer classes into the UI.
+# Bring the logic-layer classes into the UI.
 from pawpal_system import Owner, Pet, Scheduler, Task
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
@@ -8,13 +10,14 @@ st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 st.title("🐾 PawPal+")
 st.caption("Plan the day's pet care around the time you have.")
 
-# Step 2: application memory.
-# Streamlit reruns this whole script on every interaction, so we keep the
-# Owner (with its pets and tasks) in st.session_state instead of rebuilding it.
+# Application memory. Streamlit reruns this whole script on every interaction,
+# so we keep the Owner (with its pets and tasks) in st.session_state instead of
+# rebuilding it. One shared Scheduler runs the smart logic.
 if "owner" not in st.session_state:
     st.session_state.owner = Owner("Jordan", available_minutes=90)
 
 owner: Owner = st.session_state.owner
+scheduler = Scheduler()
 
 st.divider()
 
@@ -31,7 +34,7 @@ owner.available_minutes = st.number_input(
 
 st.divider()
 
-# --- Step 3a: add a pet ------------------------------------------------------
+# --- Add a pet ---------------------------------------------------------------
 st.subheader("Pets")
 with st.form("add_pet", clear_on_submit=True):
     new_pet_name = st.text_input("Pet name", value="")
@@ -52,21 +55,23 @@ if add_pet_clicked:
 if not owner.pets:
     st.info("No pets yet. Add one above to start planning.")
 
-st.divider()
-
-# --- Step 3b: add a task to a pet -------------------------------------------
+# --- Add a task to a pet -----------------------------------------------------
 if owner.pets:
+    st.divider()
     st.subheader("Add a task")
     with st.form("add_task", clear_on_submit=True):
         target_pet_name = st.selectbox("For which pet?", [p.name for p in owner.pets])
         task_desc = st.text_input("Task", value="")
-        d1, d2, d3 = st.columns(3)
+        d1, d2 = st.columns(2)
         with d1:
-            task_duration = st.number_input("Duration (min)", min_value=1, max_value=240, value=20)
+            task_time = st.time_input("Time", value=clock(8, 0))
         with d2:
-            task_priority = st.selectbox("Priority", ["low", "medium", "high"], index=2)
+            task_duration = st.number_input("Duration (min)", min_value=1, max_value=240, value=20)
+        d3, d4 = st.columns(2)
         with d3:
-            task_frequency = st.selectbox("Frequency", ["daily", "weekly"])
+            task_priority = st.selectbox("Priority", ["low", "medium", "high"], index=2)
+        with d4:
+            task_frequency = st.selectbox("Frequency", ["daily", "weekly", "once"])
         add_task_clicked = st.form_submit_button("Add task")
 
     if add_task_clicked:
@@ -78,52 +83,102 @@ if owner.pets:
                     duration=int(task_duration),
                     priority=task_priority,
                     frequency=task_frequency,
+                    time=task_time.strftime("%H:%M"),
                 )
             )
-            st.success(f"Added '{task_desc.strip()}' for {pet.name}.")
+            st.success(f"Added '{task_desc.strip()}' for {pet.name} at {task_time:%H:%M}.")
         else:
             st.warning("Please enter a task description.")
 
-    # Show each pet's current tasks; checkboxes toggle completion in place.
+    # --- Task list with filters + completion toggles -------------------------
+    st.divider()
+    st.subheader("Tasks")
+    f1, f2 = st.columns(2)
+    with f1:
+        pet_filter = st.selectbox("Show pet", ["All"] + [p.name for p in owner.pets])
+    with f2:
+        hide_done = st.checkbox("Hide completed", value=False)
+
     for pet in owner.pets:
+        if pet_filter != "All" and pet.name != pet_filter:
+            continue
         label = pet.name + (f" ({pet.breed})" if pet.breed else "")
         st.markdown(f"**{label}**")
-        if not pet.tasks:
-            st.caption("No tasks yet.")
-        for task in pet.tasks:
-            done = st.checkbox(str(task), value=task.completed, key=f"done_{task.id}")
-            if done:
-                task.mark_complete()
-            else:
+        visible = [t for t in pet.tasks if not (hide_done and t.completed)]
+        if not visible:
+            st.caption("No tasks to show.")
+        for task in visible:
+            checked = st.checkbox(str(task), value=task.completed, key=f"done_{task.id}")
+            # Only act on the transition so recurring tasks regenerate once.
+            if checked and not task.completed:
+                upcoming = scheduler.mark_task_complete(owner, task.id)
+                if upcoming is not None:
+                    st.session_state.recurred = f"'{upcoming.description}' re-added for {upcoming.due_date}."
+                st.rerun()
+            elif not checked and task.completed:
                 task.mark_incomplete()
+
+    if "recurred" in st.session_state:
+        st.success("🔁 " + st.session_state.pop("recurred"))
 
 st.divider()
 
-# --- Step 3c: generate the schedule -----------------------------------------
-st.subheader("Today's Schedule")
-if st.button("Generate schedule", type="primary", disabled=not owner.pets):
-    scheduler = Scheduler()
-    plan = scheduler.build_plan(owner)
+# --- Today's schedule: conflicts, agenda, and the auto-fit plan --------------
+if owner.pets:
+    st.subheader("Today's Schedule")
 
-    if plan["scheduled"]:
-        rows = [
-            {
-                "Start": f"{entry['start']:%H:%M}",
-                "End": f"{entry['end']:%H:%M}",
-                "Task": entry["task"].description,
-                "Pet": entry["pet"].name,
-                "Priority": entry["task"].priority,
-                "Min": entry["task"].duration,
-            }
-            for entry in plan["scheduled"]
-        ]
-        st.table(rows)
+    # Conflict warnings shown prominently so the owner can fix double-bookings.
+    conflicts = scheduler.detect_conflicts(owner)
+    for warning in conflicts:
+        st.warning("⚠️ " + warning)
+    if not conflicts:
+        st.success("No scheduling conflicts. ✅")
+
+    # Agenda sorted by the times the owner set (uses sort_by_time + filter_tasks).
+    pending = owner.pending_tasks()
+    if pending:
+        pet_by_id = {task.id: pet for pet, task in pending}
+        ordered = scheduler.sort_by_time([task for _pet, task in pending])
+        st.markdown("**Agenda (by time)**")
+        st.table(
+            [
+                {
+                    "Time": task.time or "—",
+                    "Task": task.description,
+                    "Pet": pet_by_id[task.id].name,
+                    "Priority": task.priority,
+                    "Duration": f"{task.duration} min",
+                    "Repeats": task.frequency,
+                }
+                for task in ordered
+            ]
+        )
     else:
-        st.info("Nothing could be scheduled. Add tasks or increase the available time.")
+        st.info("No pending tasks. Add one above to build an agenda.")
 
-    if plan["skipped"]:
-        st.markdown("**Skipped (ran out of time):**")
-        for entry in plan["skipped"]:
-            st.write(f"- {entry['task'].description} for {entry['pet'].name}")
+    # Priority-first auto-fit plan within the available time budget.
+    if st.button("Auto-fit plan for my available time", type="primary"):
+        plan = scheduler.build_plan(owner)
+        if plan["scheduled"]:
+            st.table(
+                [
+                    {
+                        "Start": f"{entry['start']:%H:%M}",
+                        "End": f"{entry['end']:%H:%M}",
+                        "Task": entry["task"].description,
+                        "Pet": entry["pet"].name,
+                        "Priority": entry["task"].priority,
+                        "Min": entry["task"].duration,
+                    }
+                    for entry in plan["scheduled"]
+                ]
+            )
+        else:
+            st.info("Nothing could be scheduled. Add tasks or increase the available time.")
 
-    st.caption(plan["reasoning"])
+        if plan["skipped"]:
+            st.markdown("**Skipped (ran out of time):**")
+            for entry in plan["skipped"]:
+                st.write(f"- {entry['task'].description} for {entry['pet'].name}")
+
+        st.caption(plan["reasoning"])
