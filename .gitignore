@@ -1,5 +1,12 @@
 __pycache__/
 .venv/
+venv/
 .venv_new/
 .pytest_cache/
 .DS_Store
+
+# venv artifacts that live in the repo root
+bin/
+include/
+lib/
+pyvenv.cfg

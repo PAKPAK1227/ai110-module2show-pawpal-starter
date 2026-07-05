@@ -1,15 +1,57 @@
 classDiagram
-    %% Replace the placeholders below with your actual classes, attributes, methods, and relationships.
+    %% PawPal+ class design (matches pawpal_system.py)
     %% Keep this file updated so it matches your final implementation.
 
-    class ClassName {
-        +type attribute
-        +method() returnType
+    class Task {
+        +str description
+        +int duration
+        +str priority
+        +str frequency
+        +bool completed
+        +str id
+        +priority_value() int
+        +mark_complete() void
+        +mark_incomplete() void
+        +update(changes) void
     }
 
-    class AnotherClass {
-        +type attribute
-        +method() returnType
+    class Pet {
+        +str name
+        +str species
+        +str breed
+        +list~Task~ tasks
+        +add_task(task) Task
+        +find_task(task_id) Task
+        +edit_task(task_id, changes) Task
+        +remove_task(task_id) bool
+        +list_tasks() list~Task~
+        +pending_tasks() list~Task~
     }
 
-    ClassName --> AnotherClass : relationship
+    class Owner {
+        +str name
+        +int available_minutes
+        +dict preferences
+        +list~Pet~ pets
+        +add_pet(pet) Pet
+        +find_pet(name) Pet
+        +remove_pet(name) bool
+        +set_available_time(minutes) void
+        +set_preference(key, value) void
+        +all_tasks() list
+        +pending_tasks() list
+    }
+
+    class Scheduler {
+        +str strategy
+        +time day_start
+        +sort_tasks(pairs) list
+        +build_plan(owner, available_minutes) dict
+        +mark_task_complete(owner, task_id) bool
+        +format_plan(plan) str
+    }
+
+    Owner "1" --> "*" Pet : owns
+    Pet "1" --> "*" Task : has
+    Scheduler ..> Owner : reads
+    Scheduler ..> Task : organizes
