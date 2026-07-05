@@ -38,8 +38,9 @@ Relationships: an Owner has many Pets, each Pet has many Tasks, and the Schedule
 
 **b. Tradeoffs**
 
-- Describe one tradeoff your scheduler makes.
-- Why is that tradeoff reasonable for this scenario?
+My conflict detection only flags tasks with the **exact same start time** ("HH:MM") — it does not account for task duration or overlapping windows. So a 30-minute 08:00 walk and an 08:15 feeding are treated as non-conflicting even though they actually overlap.
+
+This is a reasonable tradeoff for this scenario because exact-time matching is O(n), trivial to reason about, and returns a plain warning instead of crashing or silently rearranging the day. For a single owner juggling a handful of pet chores, "you double-booked 07:30" is the common, useful case; true interval-overlap detection would add real complexity (sorting intervals, comparing end times) for an edge case a busy owner can eyeball. If the app grew, I'd upgrade to duration-aware overlap checking.
 
 ---
 
